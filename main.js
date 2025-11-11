@@ -1,4 +1,24 @@
-const ocorrencias = [];
+// --- INÍCIO: Modificações para localStorage ---
+
+// Tenta carregar ocorrências salvas do localStorage
+function carregarOcorrenciasSalvas() {
+  const dadosSalvos = localStorage.getItem('serpal_ocorrencias');
+  if (dadosSalvos) {
+    return JSON.parse(dadosSalvos);
+  }
+  return []; // Retorna array vazio se nada for encontrado
+}
+
+// Salva a lista atual de ocorrências no localStorage
+function salvarOcorrencias(ocorrencias) {
+  localStorage.setItem('serpal_ocorrencias', JSON.stringify(ocorrencias));
+}
+
+// --- FIM: Modificações para localStorage ---
+
+// Constante global 'ocorrencias' agora é carregada do localStorage
+const ocorrencias = carregarOcorrenciasSalvas();
+
 const btnAdicionar = document.getElementById('btnAdicionar');
 const tbodyOcorrencias = document.getElementById('tbodyOcorrencias');
 const tabelaOcorrencias = document.getElementById('tabelaOcorrencias');
@@ -100,7 +120,7 @@ function gerarResumoTecnico(ocorrencia) {
         'Erro de cadastro no sistema (código e descrição divergentes).',
         'Etiqueta física divergente do cadastro interno.',
         'Migração de dados sem validação dos códigos.',
-        'Falta de padronização na criação de novos produtos.'
+        'Falta de padroniiação na criação de novos produtos.'
       ];
     } else if (ocorrencia.tipo.includes('Entrega errada de filial')) {
       causas = [
@@ -190,6 +210,31 @@ function gerarResumoTecnico(ocorrencia) {
   `;
 }
 
+// --- INÍCIO: Modificação para renderizar linha da tabela ---
+// Separei a lógica de criar a linha da tabela em uma função
+// para poder usá-la tanto ao adicionar UMA nova, quanto ao carregar TODAS.
+function criarLinhaTabela(ocorrencia) {
+  const tr = document.createElement('tr');
+  tr.dataset.id = ocorrencia.id;
+  tr.innerHTML = `
+    <td>${String(ocorrencia.id).padStart(2, '0')}</td>
+    <td><span class="pill-setor">${ocorrencia.setor}</span></td>
+    <td>${ocorrencia.tipo}</td>
+    <td>${gravidadeBadge(ocorrencia.gravidade)}</td>
+    <td>${ocorrencia.filial || '-'}</td>
+  `;
+
+  tr.addEventListener('click', () => {
+    limparSelecaoTabela();
+    tr.classList.add('selected');
+    gerarResumoTecnico(ocorrencia);
+  });
+
+  return tr;
+}
+// --- FIM: Modificação para renderizar linha da tabela ---
+
+
 btnAdicionar.addEventListener('click', () => {
   const setor = document.getElementById('setor').value;
   const filial = document.getElementById('filial').value.trim();
@@ -204,7 +249,9 @@ btnAdicionar.addEventListener('click', () => {
     return;
   }
 
-  const id = ocorrencias.length + 1;
+  // Modificado para pegar o ID com base no tamanho atual do array
+  const id = (ocorrencias.length > 0 ? Math.max(...ocorrencias.map(o => o.id)) : 0) + 1;
+  
   const novaOcorrencia = {
     id,
     setor,
@@ -218,27 +265,33 @@ btnAdicionar.addEventListener('click', () => {
 
   ocorrencias.push(novaOcorrencia);
 
-  const tr = document.createElement('tr');
-  tr.dataset.id = id;
-  tr.innerHTML = `
-    <td>${String(id).padStart(2, '0')}</td>
-    <td><span class="pill-setor">${setor}</span></td>
-    <td>${tipo}</td>
-    <td>${gravidadeBadge(gravidade)}</td>
-    <td>${filial || '-'}</td>
-  `;
-
-  tr.addEventListener('click', () => {
-    limparSelecaoTabela();
-    tr.classList.add('selected');
-    gerarResumoTecnico(novaOcorrencia);
-  });
-
+  const tr = criarLinhaTabela(novaOcorrencia); // Usa a nova função
   tbodyOcorrencias.appendChild(tr);
 
   atualizarDashboard();
+
+  // --- INÍCIO: Modificação para salvar no localStorage ---
+  salvarOcorrencias(ocorrencias);
+  // --- FIM: Modificação para salvar no localStorage ---
 
   document.getElementById('tipo').value = '';
   document.getElementById('gravidade').value = '';
   document.getElementById('descricao').value = '';
 });
+
+// --- INÍCIO: Modificação para carregar dados ao iniciar ---
+// Esta função é executada quando a página termina de carregar
+document.addEventListener('DOMContentLoaded', () => {
+  if (ocorrencias.length > 0) {
+    // Se carregou ocorrências, limpa a tabela (caso haja algo)
+    tbodyOcorrencias.innerHTML = ''; 
+    // Adiciona todas as ocorrências salvas na tabela
+    ocorrencias.forEach(ocorrencia => {
+      const tr = criarLinhaTabela(ocorrencia);
+      tbodyOcorrencias.appendChild(tr);
+    });
+  }
+  // Atualiza os contadores do dashboard
+  atualizarDashboard();
+});
+// --- FIM: Modificação para carregar dados ao iniciar ---
